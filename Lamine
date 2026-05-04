@@ -1,0 +1,17 @@
+import streamlit as st
+
+# Configura l'icona della scheda del browser
+st.set_page_config(page_title="Maglamine", page_icon="image_29.png")
+
+# Crea due colonne: una piccola per il logo e una grande per il titolo
+col1, col2 = st.columns([1, 4])
+
+with col1:
+    # Mostra la tua pallina rosso-blu LK
+    st.image("image_29.png", width=100)
+
+with col2:
+    # Scrive il titolo accanto al logo
+    st.title("Gestione Maglamine")
+
+st.write("---")
