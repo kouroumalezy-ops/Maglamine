@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from datetime import datetime
 
+
 # Password per la tua privacy
 PASSWORD_ACCESSO = "1234" 
 
