@@ -2,6 +2,16 @@ import streamlit as st
 import pandas as pd
 import os
 from datetime import datetime
+# --- CONFIGURAZIONE LOGO ---
+st.set_page_config(page_title="Maglamine", page_icon="image_29.png")
+
+col1, col2 = st.columns([1, 4])
+with col1:
+    st.image("image_29.png", width=100)
+with col2:
+    st.title("Gestione Maglamine")
+st.write("---")
+# ---------------------------
 
 
 # Password per la tua privacy
