@@ -5,17 +5,21 @@ import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime
 
-st.set_page_config(page_title="Maglamine Pro", page_icon="🏗️", layout="wide")
+# 1. CONFIGURAZIONE ICONA E TITOLO
+st.set_page_config(
+    page_title="Maglamine Transpallet", 
+    page_icon="🛒", 
+    layout="wide"
+)
 
-# --- CONFIGURAZIONE EMAIL ---
-# Sostituisci qui con la tua gmail e la password a 16 lettere di Google
+# 2. CONFIGURAZIONE EMAIL
 MIA_EMAIL = "LA_TUA_EMAIL@gmail.com" 
 PASSWORD_APP = "IL_TUO_CODICE_16_LETTERE" 
 
 def invia_email_allarme(cliente, giorni, marca):
-    corpo = f"⚠️ ALLARME MAGLAMINA\n\nIl muletto di {cliente} (Marca: {marca}) è fuori da {giorni} giorni e non è ancora rientrato."
+    corpo = f"⚠️ ALLARME MAGLAMINA\n\nIl mezzo di {cliente} (Marca: {marca}) è fuori da {giorni} giorni."
     msg = MIMEText(corpo)
-    msg['Subject'] = f"🚨 RITARDO MULETTO: {cliente}"
+    msg['Subject'] = f"🚨 RITARDO: {cliente}"
     msg['From'] = MIA_EMAIL
     msg['To'] = MIA_EMAIL
     try:
@@ -26,7 +30,7 @@ def invia_email_allarme(cliente, giorni, marca):
     except:
         return False
 
-# --- GESTIONE DATABASE ---
+# 3. GESTIONE DATABASE
 NOME_FILE = "dati_magazzino.xlsx"
 if os.path.exists(NOME_FILE):
     df = pd.read_excel(NOME_FILE)
@@ -34,8 +38,8 @@ else:
     colonne = ["Data", "Cliente", "Fornitore/Fattore", "Provenienza", "Stato", "Tipo Macchina", "Marca", "Matricola/Barcode"]
     df = pd.DataFrame(columns=colonne)
 
-# --- SEZIONE ALLARMI (In cima all'app) ---
-st.subheader("🚨 Controllo Scadenze Muletti (>10 giorni)")
+# 4. SEZIONE ALLARMI
+st.subheader("🚨 Controllo Scadenze (>10 giorni)")
 oggi = datetime.now()
 ritardi_trovati = False
 
@@ -44,52 +48,64 @@ for index, riga in df.iterrows():
         try:
             data_uscita = datetime.strptime(riga['Data'], "%d/%m/%Y %H:%M")
             giorni_passati = (oggi - data_uscita).days
-            
             if giorni_passati >= 10:
                 ritardi_trovati = True
-                col_a, col_b = st.columns([3, 1])
-                col_a.error(f"⚠️ {riga['Cliente']} - Fuori da {giorni_passati} giorni")
-                if col_b.button(f"📧 Avvisami via Mail", key=f"mail_{index}"):
+                c_a, c_b = st.columns([3, 1])
+                c_a.error(f"⚠️ {riga['Cliente']} - Fuori da {giorni_passati} giorni")
+                if c_b.button(f"📧 Avvisami via Mail", key=f"m_{index}"):
                     if invia_email_allarme(riga['Cliente'], giorni_passati, riga['Marca']):
-                        st.success("Notifica inviata alla tua email!")
+                        st.success("Mail inviata!")
                     else:
-                        st.error("Configura la Password App per le mail")
+                        st.error("Errore Mail: controlla Password App")
         except:
             continue
 if not ritardi_trovati:
-    st.success("✅ Nessun muletto in ritardo al momento.")
+    st.success("✅ Nessun mezzo in ritardo.")
 
 st.write("---")
 
-# --- INTERFACCIA DI INSERIMENTO ---
-st.title("🏗️ Gestione Magazzino Maglamina")
-c1, c2 = st.columns([1, 2])
+# 5. INTERFACCIA DI REGISTRAZIONE
+st.title("🏗️ Registro Maglamina")
+col1, col2 = st.columns([1, 2])
 
-with c1:
-    foto = st.camera_input("Foto Macchina")
+with col1:
+    foto = st.camera_input("Foto Mezzo")
 
-with c2:
-    cliente = st.text_input("👤 Nome del Cliente")
-    fornitore = st.text_input("🏢 Fornitore / Fattore")
-    provenienza = st.text_input("📍 Luogo di Provenienza")
-    stato = st.selectbox("🚦 Stato", ["In Deposito", "In Riparazione", "Muletto da prestare", "Macchina da noleggiare", "Rientro"])
-    tipo = st.text_input("🚜 Tipo Macchina")
+with col2:
+    cliente = st.text_input("👤 Cliente")
+    fornitore = st.text_input("🏢 Fornitore")
+    provenienza = st.text_input("📍 Provenienza")
+    stati = ["In Deposito", "In Riparazione", "Muletto da prestare", "Noleggio", "Rientro"]
+    stato = st.selectbox("🚦 Stato", stati)
+    tipo = st.text_input("🚜 Tipo (es. Transpallet)")
     marca = st.text_input("🏷️ Marca")
     barcode = st.text_input("🔢 Matricola / Barcode")
 
-    if st.button("✅ SALVA NEL REGISTRO", use_container_width=True):
-        nuova_riga = {
+    if st.button("✅ SALVA REGISTRAZIONE", use_container_width=True):
+        nuovo_dato = {
             "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
             "Cliente": cliente, "Fornitore/Fattore": fornitore, "Provenienza": provenienza,
             "Stato": stato, "Tipo Macchina": tipo, "Marca": marca, "Matricola/Barcode": barcode
         }
-        df = pd.concat([df, pd.DataFrame([nuova_riga])], ignore_index=True)
+        df = pd.concat([df, pd.DataFrame([nuovo_dato])], ignore_index=True)
         df.to_excel(NOME_FILE, index=False)
-        st.success("Dati salvati!")
+        st.success("Salvato correttamente!")
         st.rerun()
 
 st.write("---")
-st.subheader("📊 Registro Storico")
+st.subheader("📊 Registro Completo")
 st.dataframe(df, use_container_width=True)
 
-
+# 6. FIRMA FINALE
+st.write("---")
+st.markdown(
+    """
+    <div style='text-align: center;'>
+        <p style='color: #555; font-size: 0.9em;'>
+            📦 <b>Sistema Gestione Transpallet Maglamina</b><br>
+            Sviluppato con orgoglio da <b>Lamine Kourouma</b> v1.0
+        </p>
+    </div>
+    """, 
+    unsafe_allow_html=True
+)
