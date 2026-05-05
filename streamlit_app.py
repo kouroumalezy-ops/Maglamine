@@ -7,7 +7,13 @@ st.set_page_config(page_title="Maglamine", page_icon="image_29.png")
 
 col1, col2 = st.columns([1, 4])
 with col1:
-    st.image("image_29.png", width=100)
+    # Sostituisci la vecchia riga 10 con questo:
+foto_macchina = st.camera_input("Scansiona o fotografa la macchina")
+
+if foto_macchina:
+    st.image(foto_macchina, caption="Macchina rilevata correttamente")
+    st.success("Foto acquisita! Ora compila i dati qui sotto per il magazzino.")
+
 with col2:
     st.title("Gestione Maglamine")
 st.write("---")
