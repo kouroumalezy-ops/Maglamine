@@ -4,108 +4,75 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime
+import google.generativeai as genai
+from PIL import Image
 
 # 1. CONFIGURAZIONE PAGINA
-st.set_page_config(
-    page_title="Maglamine Transpallet", 
-    page_icon="🛒", 
-    layout="wide"
-)
+st.set_page_config(page_title="Maglamine AI & Tech", page_icon="🤖", layout="wide")
 
-# 2. CONFIGURAZIONE EMAIL
+# 2. CREDENZIALI
 MIA_EMAIL = "kurumalesi@gmail.com" 
 PASSWORD_APP = "METTI_QUI_LE_TUE_16_LETTERE" 
 
-def invia_email_allarme(cliente, giorni, marca):
-    corpo = f"⚠️ ALLARME MAGLAMINA\n\nIl mezzo di {cliente} (Marca: {marca}) è fuori da {giorni} giorni."
-    msg = MIMEText(corpo)
-    msg['Subject'] = f"🚨 RITARDO: {cliente}"
-    msg['From'] = MIA_EMAIL
-    msg['To'] = MIA_EMAIL
-    try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-            server.login(MIA_EMAIL, PASSWORD_APP)
-            server.send_message(msg)
-        return True
-    except:
-        return False
+# CHIAVE IA
+genai.configure(api_key="AIzaSyCOnJQ9ueY2Bcp9nkibY6P0GpEmQ5-HvK8")
 
-# 3. GESTIONE DATABASE
+def identifica_attrezzatura(immagine_pil):
+    try:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        prompt = "Identifica l'attrezzatura logistica in foto. Rispondi solo con il nome dell'oggetto (max 2 parole)."
+        response = model.generate_content([prompt, immagine_pil])
+        return response.text.strip()
+    except:
+        return ""
+
+# 3. DATABASE (Aggiornato con Tecnico e Luogo)
 NOME_FILE = "dati_magazzino.xlsx"
 if os.path.exists(NOME_FILE):
     df = pd.read_excel(NOME_FILE)
 else:
-    colonne = ["Data", "Cliente", "Fornitore/Fattore", "Provenienza", "Stato", "Tipo Macchina", "Marca", "Matricola/Barcode"]
-    df = pd.DataFrame(columns=colonne)
+    df = pd.DataFrame(columns=["Data", "Cliente", "Stato", "Tipo", "Marca", "Tecnico", "Luogo"])
 
-# 4. SEZIONE ALLARMI
-st.subheader("🚨 Controllo Scadenze (>10 giorni)")
-oggi = datetime.now()
-ritardi_trovati = False
+# 4. INTERFACCIA
+st.title("🤖 Maglamina: Gestione Tecnica AI")
 
-for index, riga in df.iterrows():
-    if riga['Stato'] == "Muletto da prestare":
-        try:
-            data_uscita = datetime.strptime(riga['Data'], "%d/%m/%Y %H:%M")
-            giorni_passati = (oggi - data_uscita).days
-            if giorni_passati >= 10:
-                ritardi_trovati = True
-                c_a, c_b = st.columns([3, 1])
-                c_a.error(f"⚠️ {riga['Cliente']} - Fuori da {giorni_passati} giorni")
-                if c_b.button(f"📧 Avvisa via Mail", key=f"m_{index}"):
-                    if invia_email_allarme(riga['Cliente'], giorni_passati, riga['Marca']):
-                        st.success("Mail inviata!")
-                    else:
-                        st.error("Errore Mail: controlla Password App")
-        except:
-            continue
-if not ritardi_trovati:
-    st.success("✅ Nessun mezzo in ritardo.")
+col1, col2 = st.columns([1, 1])
 
-st.write("---")
-
-# 5. INTERFACCIA DI REGISTRAZIONE
-st.title("🏗️ Registro Maglamina")
-col1, col2 = st.columns([1, 2])
-
+tipo_rilevato = ""
 with col1:
-    st.camera_input("Foto Mezzo", key="foto_mezzo")
+    foto = st.camera_input("📸 Foto per il Tecnico")
+    if foto:
+        img = Image.open(foto)
+        with st.spinner("L'IA sta identificando il mezzo..."):
+            tipo_rilevato = identifica_attrezzatura(img)
 
 with col2:
     cliente = st.text_input("👤 Cliente")
-    fornitore = st.text_input("🏢 Fornitore")
-    provenienza = st.text_input("📍 Provenienza")
-    stati = ["In Deposito", "In Riparazione", "Muletto da prestare", "Noleggio", "Rientro"]
-    stato = st.selectbox("🚦 Stato", stati)
-    tipo = st.text_input("🚜 Tipo (es. Transpallet)")
-    marca = st.text_input("🏷️ Marca")
-    barcode = st.text_input("🔢 Matricola / Barcode")
+    tipo = st.text_input("🚜 Tipo Macchina", value=tipo_rilevato)
+    
+    # MODIFICA: Menu Stato con "Ritiro Tecnico"
+    stati_possibili = ["In Deposito", "Ritiro Tecnico", "In Riparazione", "Muletto da prestare", "Rientro"]
+    stato = st.selectbox("🚦 Stato Attrezzatura", stati_possibili)
+    
+    # AGGIUNTA: Riferimento Tecnico
+    tecnico = st.text_input("👨‍🔧 Nome Tecnico (Ritira/Consegna)")
+    
+    luogo = st.text_input("📍 Luogo di giacenza")
 
-    if st.button("✅ SALVA REGISTRAZIONE", use_container_width=True):
-        nuovo_dato = {
+    if st.button("✅ REGISTRA E AVVISA", use_container_width=True):
+        nuovo = {
             "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
-            "Cliente": cliente, "Fornitore/Fattore": fornitore, "Provenienza": provenienza,
-            "Stato": stato, "Tipo Macchina": tipo, "Marca": marca, "Matricola/Barcode": barcode
+            "Cliente": cliente, 
+            "Stato": stato,
+            "Tipo": tipo, 
+            "Tecnico": tecnico,
+            "Luogo": luogo
         }
-        df = pd.concat([df, pd.DataFrame([nuovo_dato])], ignore_index=True)
+        df = pd.concat([df, pd.DataFrame([nuovo])], ignore_index=True)
         df.to_excel(NOME_FILE, index=False)
-        st.success("Salvato correttamente!")
+        st.success(f"Registrato! Stato: {stato} - Tecnico: {tecnico}")
         st.rerun()
 
 st.write("---")
-st.subheader("📊 Registro Completo")
+st.subheader("📊 Registro Interventi e Ritiri")
 st.dataframe(df, use_container_width=True)
-
-# 6. FIRMA FINALE
-st.write("---")
-st.markdown(
-    """
-    <div style='text-align: center;'>
-        <p style='color: #555; font-size: 0.9em;'>
-            📦 <b>Sistema Gestione Transpallet Maglamina</b><br>
-            Sviluppato con orgoglio da <b>Lamine Kourouma</b> v1.0
-        </p>
-    </div>
-    """, 
-    unsafe_allow_html=True
-)
