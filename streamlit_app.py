@@ -12,67 +12,81 @@ st.set_page_config(page_title="Maglamine AI & Tech", page_icon="🤖", layout="w
 
 # 2. CREDENZIALI
 MIA_EMAIL = "kurumalesi@gmail.com" 
-PASSWORD_APP = "METTI_QUI_LE_TUE_16_LETTERE" 
+PASSWORD_APP = "INSERISCI_QUI_LE_TUE_16_LETTERE" 
 
-# CHIAVE IA
+# CHIAVE IA GEMINI
 genai.configure(api_key="AIzaSyCOnJQ9ueY2Bcp9nkibY6P0GpEmQ5-HvK8")
 
 def identifica_attrezzatura(immagine_pil):
     try:
         model = genai.GenerativeModel('gemini-1.5-flash')
-        prompt = "Identifica l'attrezzatura logistica in foto. Rispondi solo con il nome dell'oggetto (max 2 parole)."
+        prompt = "Identifica l'attrezzatura logistica in questa foto. Rispondi solo con il nome dell'oggetto (es: Muletto, Transpallet, Scaffale)."
         response = model.generate_content([prompt, immagine_pil])
         return response.text.strip()
     except:
         return ""
 
-# 3. DATABASE (Aggiornato con Tecnico e Luogo)
+# 3. DATABASE
 NOME_FILE = "dati_magazzino.xlsx"
 if os.path.exists(NOME_FILE):
     df = pd.read_excel(NOME_FILE)
 else:
-    df = pd.DataFrame(columns=["Data", "Cliente", "Stato", "Tipo", "Marca", "Tecnico", "Luogo"])
+    colonne = ["Data", "Cliente", "Stato", "Tipo Macchina", "Tecnico Riferimento", "Luogo", "Marca/Matricola"]
+    df = pd.DataFrame(columns=colonne)
 
-# 4. INTERFACCIA
-st.title("🤖 Maglamina: Gestione Tecnica AI")
+# 4. INTERFACCIA PRINCIPALE
+st.title("🏗️ Registro Maglamina AI")
+st.write("Gestione intelligente delle attrezzature e dei ritiri tecnici.")
 
 col1, col2 = st.columns([1, 1])
 
 tipo_rilevato = ""
 with col1:
-    foto = st.camera_input("📸 Foto per il Tecnico")
+    st.subheader("📸 Acquisizione")
+    foto = st.camera_input("Scatta foto per identificazione automatica")
     if foto:
         img = Image.open(foto)
-        with st.spinner("L'IA sta identificando il mezzo..."):
+        with st.spinner("L'IA sta analizzando il mezzo..."):
             tipo_rilevato = identifica_attrezzatura(img)
+            st.success(f"IA rileva: {tipo_rilevato}")
 
 with col2:
-    cliente = st.text_input("👤 Cliente")
+    st.subheader("📝 Dettagli Registrazione")
+    cliente = st.text_input("👤 Cliente / Cantiere")
+    
+    # Campo Tipo compilato automaticamente dall'IA
     tipo = st.text_input("🚜 Tipo Macchina", value=tipo_rilevato)
     
-    # MODIFICA: Menu Stato con "Ritiro Tecnico"
-    stati_possibili = ["In Deposito", "Ritiro Tecnico", "In Riparazione", "Muletto da prestare", "Rientro"]
-    stato = st.selectbox("🚦 Stato Attrezzatura", stati_possibili)
+    # Menu Stato con focus sul Tecnico
+    stati = ["In Deposito", "Ritiro Tecnico", "Consegnato al Tecnico", "In Riparazione", "Rientro"]
+    stato = st.selectbox("🚦 Stato Attrezzatura", stati)
     
-    # AGGIUNTA: Riferimento Tecnico
-    tecnico = st.text_input("👨‍🔧 Nome Tecnico (Ritira/Consegna)")
-    
-    luogo = st.text_input("📍 Luogo di giacenza")
+    # Riferimento Tecnico e Luogo
+    tecnico = st.text_input("👨‍🔧 Tecnico di Riferimento", placeholder="Chi ritira il mezzo?")
+    luogo = st.text_input("📍 Luogo / Posizione", placeholder="Es: Magazzino Nord, Settore B")
+    info_extra = st.text_input("🏷️ Marca o Matricola")
 
-    if st.button("✅ REGISTRA E AVVISA", use_container_width=True):
-        nuovo = {
+    if st.button("✅ SALVA E REGISTRA", use_container_width=True):
+        nuovo_dato = {
             "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
             "Cliente": cliente, 
             "Stato": stato,
-            "Tipo": tipo, 
-            "Tecnico": tecnico,
-            "Luogo": luogo
+            "Tipo Macchina": tipo, 
+            "Tecnico Riferimento": tecnico,
+            "Luogo": luogo,
+            "Marca/Matricola": info_extra
         }
-        df = pd.concat([df, pd.DataFrame([nuovo])], ignore_index=True)
+        df = pd.concat([df, pd.DataFrame([nuovo_dato])], ignore_index=True)
         df.to_excel(NOME_FILE, index=False)
-        st.success(f"Registrato! Stato: {stato} - Tecnico: {tecnico}")
+        st.balloons()
+        st.success(f"Registrato con successo per il tecnico: {tecnico}")
         st.rerun()
 
+# 5. TABELLA REGISTRO
 st.write("---")
-st.subheader("📊 Registro Interventi e Ritiri")
+st.subheader("📊 Registro Storico (Tecnico & Magazzino)")
 st.dataframe(df, use_container_width=True)
+
+# 6. FIRMA
+st.write("---")
+st.markdown("<p style='text-align: center; color: gray;'>Sviluppato da Lamine Kourouma v2.0 - IA Integrata</p>", unsafe_allow_html=True)
