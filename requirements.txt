@@ -1,7 +1,5 @@
-
 streamlit
 google-generativeai
-Pillow
-pandas
-reportlab
-openpyxl
+fpdf2
+pillow
+
