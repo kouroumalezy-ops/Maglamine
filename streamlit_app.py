@@ -3,68 +3,61 @@ import google.generativeai as genai
 from PIL import Image
 import io
 
-# 1. SETUP API E PAGINA
+# 1. SETUP - Cambiamo la versione dell'API internamente
 st.set_page_config(page_title="Magazzino della Min", layout="wide")
 genai.configure(api_key="AIzaSyCOnJQ9ueY2Bcp9nkibY6P0GpEmQ5-HvK8")
 
-# Inizializzazione dati se non esistono
+# Inizializzazione sicura dei dati
 if 'risultato_ia' not in st.session_state:
     st.session_state.risultato_ia = ["", "", "", ""]
 
-def analizza_targa(foto):
+def analizza_targa_stabile(foto):
     try:
-        # Carica e ottimizza immagine
         img = Image.open(foto)
         img.thumbnail((500, 500))
         
-        # Configura modello
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # PROVIAMO IL MODELLO PIÙ COMPATIBILE IN ASSOLUTO
+        model = genai.GenerativeModel('gemini-pro-vision')
         
-        # Prompt super diretto
-        prompt = "Analizza questa targa. Scrivi solo i valori di TIPO, MARCA, MODELLO, MATRICOLA separati da una virgola. Non aggiungere altro testo."
+        prompt = "Analizza targa: scrivi TIPO, MARCA, MODELLO, MATRICOLA separati da virgola."
         
         response = model.generate_content([prompt, img])
         
-        # Pulizia risposta
-        dati = response.text.replace('\n', '').split(',')
-        # Assicuriamoci di avere 4 elementi
+        # Pulizia della risposta per evitare errori di formattazione
+        testo = response.text.strip()
+        dati = [v.strip() for v in testo.split(',')]
+        
         while len(dati) < 4:
             dati.append("")
         return dati
     except Exception as e:
-        st.error(f"Errore durante l'analisi: {e}")
-        return ["Errore", "Errore", "Errore", "Errore"]
+        # Se il modello pro-vision non è disponibile, forziamo l'ultimo tentativo col flash standard
+        try:
+            model_flash = genai.GenerativeModel('gemini-1.5-flash')
+            response = model_flash.generate_content(["Estrai TIPO, MARCA, MODELLO, MATRICOLA da questa targa, separati da virgola", img])
+            return [v.strip() for v in response.text.split(',')]
+        except:
+            st.error("Errore di connessione ai server Google. Riprova tra un istante.")
+            return ["", "", "", ""]
 
-# 2. INTERFACCIA UTENTE
+# 2. INTERFACCIA
 st.title("📦 Magazzino della Min")
 st.write("Sviluppatore: **Lamine Kourouma**")
 
-# Caricamento Foto
 foto_input = st.camera_input("📸 Scatta la foto alla targa")
 
 if foto_input:
-    # Se clicchi il tasto, esegue l'analisi e salva subito nello stato della pagina
     if st.button("🔍 AVVIA LETTURA DATI"):
-        with st.spinner("Sto leggendo la targa..."):
-            dati_letti = analizza_targa(foto_input)
+        with st.spinner("Lettura in corso..."):
+            dati_letti = analizza_targa_stabile(foto_input)
             st.session_state.risultato_ia = dati_letti
-            st.success("Lettura completata!")
+            st.rerun() # Forza l'aggiornamento immediato delle caselle
 
 st.divider()
 
-# 3. CAMPI DI TESTO (Prendono i dati dallo stato della sessione)
-st.subheader("📝 Dettagli Macchinario")
-
-# Usiamo variabili per i campi per facilitare la lettura
+# 3. CASSETTE DI TESTO
 dati = st.session_state.risultato_ia
-
-tipo = st.text_input("TIPO", value=dati[0])
-marca = st.text_input("MARCA", value=dati[1])
-modello = st.text_input("MODELLO", value=dati[2])
-matricola = st.text_input("MATRICOLA", value=dati[3])
-
-st.divider()
-
-if st.button("💾 CONFERMA E SALVA"):
-    st.balloons()
-    st.success(f"Scheda per {marca} {modello} registrata con successo!")
+st.text_input("TIPO", value=dati[0])
+st.text_input("MARCA", value=dati[1])
+st.text_input("MODELLO", value=dati[2])
+st.text_input("MATRICOLA", value=dati[3])
