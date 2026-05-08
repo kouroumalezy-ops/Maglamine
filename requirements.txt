@@ -1,6 +1,7 @@
+
 streamlit
-pandas
-openpyxl
 google-generativeai
 Pillow
+pandas
 reportlab
+openpyxl
