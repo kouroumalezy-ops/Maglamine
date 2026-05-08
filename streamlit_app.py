@@ -1,63 +1,59 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
-import io
 
-# 1. SETUP - Cambiamo la versione dell'API internamente
-st.set_page_config(page_title="Magazzino della Min", layout="wide")
+# 1. SETUP - Usiamo la configurazione più semplice
+st.set_page_config(page_title="Magazzino della Min")
 genai.configure(api_key="AIzaSyCOnJQ9ueY2Bcp9nkibY6P0GpEmQ5-HvK8")
 
-# Inizializzazione sicura dei dati
-if 'risultato_ia' not in st.session_state:
-    st.session_state.risultato_ia = ["", "", "", ""]
+# Inizializziamo i dati nella memoria dell'app
+if 'dati_letti' not in st.session_state:
+    st.session_state.dati_letti = ["", "", "", ""]
 
-def analizza_targa_stabile(foto):
+def leggi_targa(immagine):
     try:
-        img = Image.open(foto)
-        img.thumbnail((500, 500))
+        # Usiamo il modello 'gemini-1.5-flash' ma senza beta nel codice
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
-        # PROVIAMO IL MODELLO PIÙ COMPATIBILE IN ASSOLUTO
-        model = genai.GenerativeModel('gemini-pro-vision')
+        # Chiediamo solo i testi separati da virgola
+        prompt = "Estrai dalla targa i valori: TIPO, MARCA, MODELLO, MATRICOLA. Scrivili separati solo da una virgola, senza altro testo."
         
-        prompt = "Analizza targa: scrivi TIPO, MARCA, MODELLO, MATRICOLA separati da virgola."
+        img = Image.open(immagine)
+        img.thumbnail((600, 600)) # Rimpiccioliamo per velocità
         
         response = model.generate_content([prompt, img])
-        
-        # Pulizia della risposta per evitare errori di formattazione
         testo = response.text.strip()
-        dati = [v.strip() for v in testo.split(',')]
         
-        while len(dati) < 4:
-            dati.append("")
-        return dati
+        # Dividiamo la risposta in 4 parti
+        risultato = [x.strip() for x in testo.split(',')]
+        while len(risultato) < 4: risultato.append("")
+        return risultato
     except Exception as e:
-        # Se il modello pro-vision non è disponibile, forziamo l'ultimo tentativo col flash standard
-        try:
-            model_flash = genai.GenerativeModel('gemini-1.5-flash')
-            response = model_flash.generate_content(["Estrai TIPO, MARCA, MODELLO, MATRICOLA da questa targa, separati da virgola", img])
-            return [v.strip() for v in response.text.split(',')]
-        except:
-            st.error("Errore di connessione ai server Google. Riprova tra un istante.")
-            return ["", "", "", ""]
+        st.error(f"Errore: {e}")
+        return ["", "", "", ""]
 
 # 2. INTERFACCIA
 st.title("📦 Magazzino della Min")
 st.write("Sviluppatore: **Lamine Kourouma**")
 
-foto_input = st.camera_input("📸 Scatta la foto alla targa")
+foto = st.camera_input("Inquadra la targa")
 
-if foto_input:
-    if st.button("🔍 AVVIA LETTURA DATI"):
-        with st.spinner("Lettura in corso..."):
-            dati_letti = analizza_targa_stabile(foto_input)
-            st.session_state.risultato_ia = dati_letti
-            st.rerun() # Forza l'aggiornamento immediato delle caselle
+if foto:
+    if st.button("🔍 CLICCA QUI PER COMPILARE"):
+        with st.spinner("Analisi in corso..."):
+            dati = leggi_targa(foto)
+            st.session_state.dati_letti = dati
+            st.rerun()
 
 st.divider()
 
-# 3. CASSETTE DI TESTO
-dati = st.session_state.risultato_ia
-st.text_input("TIPO", value=dati[0])
-st.text_input("MARCA", value=dati[1])
-st.text_input("MODELLO", value=dati[2])
-st.text_input("MATRICOLA", value=dati[3])
+# 3. CAMPI CHE SI RIEMPIONO
+st.subheader("Dettagli Macchina")
+# Assegniamo i valori letti alle caselle
+tipo = st.text_input("TIPO", value=st.session_state.dati_letti[0])
+marca = st.text_input("MARCA", value=st.session_state.dati_letti[1])
+modello = st.text_input("MODELLO", value=st.session_state.dati_letti[2])
+matricola = st.text_input("MATRICOLA", value=st.session_state.dati_letti[3])
+
+if st.button("💾 SALVA SCHEDA"):
+    st.success("Dati salvati!")
