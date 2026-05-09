@@ -2,7 +2,7 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 
-# 1. CONFIGURAZIONE PAGINA (Titolo che apparirà sulla Home del telefono)
+# 1. CONFIGURAZIONE PAGINA
 st.set_page_config(
     page_title="Magazzino Lamine",
     page_icon="📦",
@@ -10,6 +10,7 @@ st.set_page_config(
 )
 
 # 2. COLORI PERSONALIZZATI (Rosso e Blu)
+# CORREZIONE: Il parametro corretto è unsafe_allow_html=True
 st.markdown("""
     <style>
     /* Sfondo della barra superiore (Blu) */
@@ -35,18 +36,19 @@ st.markdown("""
         border-left-color: #FF0000 !important;
     }
     </style>
-    """, unsafe_allow_this_html=True)
+    """, unsafe_allow_html=True)
 
-# 3. CONFIGURAZIONE AI (Sostituisci con la tua chiave!)
+# 3. CONFIGURAZIONE AI
+# RICORDATI: Sostituisci "LA_TUA_API_KEY_QUI" con la tua vera chiave API
 API_KEY = "LA_TUA_API_KEY_QUI" 
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# 4. FUNZIONE LOGICA
+# 4. FUNZIONE LOGICA PER L'ANALISI
 def analizza_targa(foto):
     try:
         img = Image.open(foto)
-        prompt = "Analizza questa immagine di un macchinario o targa e descrivi il contenuto."
+        prompt = "Analizza questa immagine di una targa tecnica di un macchinario. Estrai modello, numero di serie e specifiche principali."
         response = model.generate_content([prompt, img])
         return response.text
     except Exception as e:
@@ -54,7 +56,7 @@ def analizza_targa(foto):
 
 # 5. INTERFACCIA UTENTE
 st.title("📦 Magazzino Lamine Kourouma")
-st.write("Scansiona la targa del macchinario per registrarlo.")
+st.write("Scansiona la targa del macchinario per registrarlo automaticamente.")
 
 # Input fotocamera
 foto_input = st.camera_input("Scatta una foto alla targa")
