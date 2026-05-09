@@ -1,72 +1,118 @@
 import streamlit as st
+
+# QUESTA DEVE ESSERE LA PRIMA RIGA DI CODICE STREAMLIT
+st.set_page_config(
+    page_title="Magazzino Lamine", # <--- Qui metti il tuo nome
+    page_icon="🔵",                # <--- Qui puoi mettere un'emoji o un link a un'immagine
+    layout="wide"
+)
+
+st.title("Magazzino Lamine Kourouma")
+# ... resto del tuo codice ...
+import streamlit as st
 import google.generativeai as genai
+from fpdf import FPDF
 from PIL import Image
-import pandas as pd # Per gestire i dati come una tabella
+from datetime import datetime, timedelta
 
-# 1. CONFIGURAZIONE PAGINA
-st.set_page_config(page_title="Magazzino Lamine", page_icon="📦", layout="centered")
+# --- 1. SICUREZZA E AI ---
+# Assicurati di aggiungere GOOGLE_API_KEY nei 'Secrets' di Streamlit Cloud
+try:
+    API_KEY = st.secrets["GOOGLE_API_KEY"]
+    genai.configure(api_key=API_KEY)
+except:
+    st.error("⚠️ Chiave API non trovata! Configurala nei Secrets di Streamlit.")
 
-# Inizializzazione della "Memoria" (Session State)
-if 'storico' not in st.session_state:
-    st.session_state.storico = []
+# --- 2. CONFIGURAZIONE ESTETICA (ROSSO/BLU) ---
+st.set_page_config(page_title="Lamine Kourouma Magazzino", layout="centered")
 
-# 2. COLORI PERSONALIZZATI
 st.markdown("""
     <style>
-    header[data-testid="stHeader"] { background-color: #0000FF !important; }
-    h1 { color: #0000FF !important; }
-    .stButton>button { background-color: #FF0000 !important; color: white !important; border-radius: 20px !important; width: 100% !important; }
+    .stApp { background-color: #f4f7f9; }
+    h1 { color: #1d3557; border-bottom: 3px solid #e63946; }
+    .stButton>button { background-color: #e63946; color: white; border-radius: 10px; border: none; height: 50px; font-weight: bold;}
+    .stButton>button:hover { background-color: #1d3557; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. CONFIGURAZIONE AI
-API_KEY = "LA_TUA_API_KEY_QUI" 
-genai.configure(api_key=API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+# --- 3. FUNZIONI LOGICHE ---
+def analizza_targa(foto):
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    img = Image.open(foto)
+    prompt = "Analizza questa etichetta tecnica. Estrai: Marca, Modello, S/N. Rispondi in modo schematico."
+    response = model.generate_content([prompt, img])
+    return response.text
 
-# 4. INTERFACCIA UTENTE
+def crea_scheda_pdf(dati):
+    pdf = FPDF()
+    pdf.add_page()
+    # Intestazione Blu
+    pdf.set_fill_color(29, 53, 87)
+    pdf.rect(0, 0, 210, 35, 'F')
+    pdf.set_font("Arial", 'B', 18)
+    pdf.set_text_color(255, 255, 255)
+    pdf.text(15, 22, "LAMINE KOUROUMA - SCHEDA TECNICA")
+    
+    # Contenuto
+    pdf.set_text_color(0, 0, 0)
+    pdf.set_font("Arial", '', 12)
+    pdf.ln(40)
+    pdf.cell(0, 10, f"DATA: {dati['data']}", ln=True)
+    pdf.cell(0, 10, f"REPARTO: {dati['reparto']}", ln=True)
+    pdf.cell(0, 10, f"SCADENZA PREVISTA: {dati['scadenza']}", ln=True)
+    pdf.ln(5)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, f"MACCHINARIO: {dati['modello']}", ln=True)
+    pdf.cell(0, 10, f"MATRICOLA: {dati['sn']}", ln=True)
+    pdf.cell(0, 10, f"CLIENTE: {dati['cliente']}", ln=True)
+    pdf.ln(10)
+    pdf.cell(0, 10, "NOTE INTERVENTO:", ln=True)
+    pdf.set_font("Arial", '', 11)
+    pdf.multi_cell(0, 10, dati['note'], border=1)
+    return pdf.output(dest='S').encode('latin-1')
+
+# --- 4. INTERFACCIA APP ---
 st.title("📦 Magazzino Lamine Kourouma")
 
-# --- NUOVO: SELEZIONE LUOGO ---
-st.subheader("📍 Localizzazione")
-luogo = st.selectbox("Seleziona il luogo attuale:", ["Magazzino Centrale", "Cantiere Nord", "Deposito Esterno", "Altro..."])
+# Fotocamera
+foto_input = st.camera_input("Scansiona Targa Macchinario")
 
-st.write("---")
+if foto_input:
+    with st.spinner("L'AI sta leggendo i dati..."):
+        testo_ai = analizza_targa(foto_input)
+        st.success("Dati rilevati correttamente!")
+        st.text_area("Dati AI:", testo_ai)
 
-# Scansione
-st.subheader("📸 Registra Nuovo Pezzo")
-foto_input = st.camera_input("Scatta una foto alla targa")
+st.divider()
 
-if foto_input is not None:
-    with st.spinner("Analisi e registrazione in corso..."):
-        try:
-            img = Image.open(foto_input)
-            response = model.generate_content(["Estrai modello e seriale da questa targa in modo sintetico.", img])
-            dati_analizzati = response.text
-            
-            # Salvataggio nella memoria della sessione
-            nuova_registrazione = {
-                "Data": pd.Timestamp.now().strftime("%d/%m/%Y %H:%M"),
-                "Luogo": luogo,
-                "Dettagli": dati_analizzati
-            }
-            st.session_state.storico.append(nuova_registrazione)
-            st.success(f"Registrato con successo in: {luogo}")
-        except Exception as e:
-            st.error(f"Errore: {e}")
-
-# --- NUOVO: VISUALIZZAZIONE CAMPI REGISTRATI ---
-st.write("---")
-st.subheader("📂 Registro Scansioni Recenti")
-
-if st.session_state.storico:
-    df = pd.DataFrame(st.session_state.storico)
-    st.table(df) # Mostra la tabella con i tuoi campi salvati
+# Form di registrazione
+with st.form("magazzino_form"):
+    col1, col2 = st.columns(2)
+    with col1:
+        modello = st.text_input("Modello Macchina")
+        cliente = st.text_input("Cliente")
+    with col2:
+        reparto = st.selectbox("Destinazione", ["Deposito", "Riparazione", "Noleggio"])
+        seriale = st.text_input("S/N o Matricola")
     
-    if st.button("Svuota Registro"):
-        st.session_state.storico = []
-        st.rerun()
-else:
-    st.info("Nessun dato registrato in questa sessione.")
+    note = st.text_area("Descrizione Guasto / Note")
+    
+    inviato = st.form_submit_button("REGISTRA E GENERA PDF")
 
-st.caption("App creata per la gestione magazzino personalizzata.")
+    if inviato:
+        data_oggi = datetime.now()
+        data_scadenza = data_oggi + timedelta(days=90)
+        
+        dati_scheda = {
+            "data": data_oggi.strftime("%d/%m/%Y"),
+            "scadenza": data_scadenza.strftime("%d/%m/%Y"),
+            "modello": modello,
+            "cliente": cliente,
+            "reparto": reparto,
+            "sn": seriale,
+            "note": note
+        }
+        
+        pdf_bytes = crea_scheda_pdf(dati_scheda)
+        st.download_button("📥 Scarica Scheda Riparazione", pdf_bytes, f"Scheda_{seriale}.pdf", "application/pdf")
+
