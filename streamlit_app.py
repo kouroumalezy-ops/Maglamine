@@ -1,73 +1,72 @@
 import streamlit as st
 import google.generativeai as genai
 from PIL import Image
+import pandas as pd # Per gestire i dati come una tabella
 
 # 1. CONFIGURAZIONE PAGINA
-st.set_page_config(
-    page_title="Magazzino Lamine",
-    page_icon="📦",
-    layout="centered"
-)
+st.set_page_config(page_title="Magazzino Lamine", page_icon="📦", layout="centered")
 
-# 2. COLORI PERSONALIZZATI (Rosso e Blu)
-# CORREZIONE: Il parametro corretto è unsafe_allow_html=True
+# Inizializzazione della "Memoria" (Session State)
+if 'storico' not in st.session_state:
+    st.session_state.storico = []
+
+# 2. COLORI PERSONALIZZATI
 st.markdown("""
     <style>
-    /* Sfondo della barra superiore (Blu) */
-    header[data-testid="stHeader"] {
-        background-color: #0000FF !important;
-    }
-    /* Titolo principale (Blu) */
-    h1 {
-        color: #0000FF !important;
-        font-family: 'Arial', sans-serif;
-    }
-    /* Pulsanti (Rosso) */
-    .stButton>button {
-        background-color: #FF0000 !important;
-        color: white !important;
-        border-radius: 20px !important;
-        border: none !important;
-        height: 3em !important;
-        width: 100% !important;
-    }
-    /* Messaggi di errore o istruzioni */
-    .stAlert {
-        border-left-color: #FF0000 !important;
-    }
+    header[data-testid="stHeader"] { background-color: #0000FF !important; }
+    h1 { color: #0000FF !important; }
+    .stButton>button { background-color: #FF0000 !important; color: white !important; border-radius: 20px !important; width: 100% !important; }
     </style>
     """, unsafe_allow_html=True)
 
 # 3. CONFIGURAZIONE AI
-# RICORDATI: Sostituisci "LA_TUA_API_KEY_QUI" con la tua vera chiave API
 API_KEY = "LA_TUA_API_KEY_QUI" 
 genai.configure(api_key=API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# 4. FUNZIONE LOGICA PER L'ANALISI
-def analizza_targa(foto):
-    try:
-        img = Image.open(foto)
-        prompt = "Analizza questa immagine di una targa tecnica di un macchinario. Estrai modello, numero di serie e specifiche principali."
-        response = model.generate_content([prompt, img])
-        return response.text
-    except Exception as e:
-        return f"Errore durante l'analisi: {e}"
-
-# 5. INTERFACCIA UTENTE
+# 4. INTERFACCIA UTENTE
 st.title("📦 Magazzino Lamine Kourouma")
-st.write("Scansiona la targa del macchinario per registrarlo automaticamente.")
 
-# Input fotocamera
+# --- NUOVO: SELEZIONE LUOGO ---
+st.subheader("📍 Localizzazione")
+luogo = st.selectbox("Seleziona il luogo attuale:", ["Magazzino Centrale", "Cantiere Nord", "Deposito Esterno", "Altro..."])
+
+st.write("---")
+
+# Scansione
+st.subheader("📸 Registra Nuovo Pezzo")
 foto_input = st.camera_input("Scatta una foto alla targa")
 
 if foto_input is not None:
-    st.info("Analisi in corso... attendi un istante.")
-    risultato = analizza_targa(foto_input)
-    
-    st.subheader("Risultato Scansione:")
-    st.success(risultato)
+    with st.spinner("Analisi e registrazione in corso..."):
+        try:
+            img = Image.open(foto_input)
+            response = model.generate_content(["Estrai modello e seriale da questa targa in modo sintetico.", img])
+            dati_analizzati = response.text
+            
+            # Salvataggio nella memoria della sessione
+            nuova_registrazione = {
+                "Data": pd.Timestamp.now().strftime("%d/%m/%Y %H:%M"),
+                "Luogo": luogo,
+                "Dettagli": dati_analizzati
+            }
+            st.session_state.storico.append(nuova_registrazione)
+            st.success(f"Registrato con successo in: {luogo}")
+        except Exception as e:
+            st.error(f"Errore: {e}")
 
-# Messaggio a fondo pagina
+# --- NUOVO: VISUALIZZAZIONE CAMPI REGISTRATI ---
 st.write("---")
+st.subheader("📂 Registro Scansioni Recenti")
+
+if st.session_state.storico:
+    df = pd.DataFrame(st.session_state.storico)
+    st.table(df) # Mostra la tabella con i tuoi campi salvati
+    
+    if st.button("Svuota Registro"):
+        st.session_state.storico = []
+        st.rerun()
+else:
+    st.info("Nessun dato registrato in questa sessione.")
+
 st.caption("App creata per la gestione magazzino personalizzata.")
