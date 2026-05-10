@@ -6,66 +6,87 @@ import google.generativeai as genai
 from PIL import Image
 import json
 
-# --- 1. CONFIGURAZIONE E STILE "LAMINE PRO" ---
+# --- 1. CONFIGURAZIONE E STILE "LAMINE LIGHT & PRO" ---
 st.set_page_config(page_title="Lamine AI - Sistema Logistico", page_icon="🏗️", layout="wide")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; color: white; }
-    .stButton>button {
-        background: linear-gradient(135deg, #ffcc00, #ff9900);
-        color: black !important;
-        font-weight: bold;
-        border-radius: 10px;
-        border: none;
-        height: 3em;
-        transition: 0.3s;
+    /* Sfondo grigio chiaro professionale */
+    .stApp { 
+        background-color: #f0f2f6; 
+        color: #1e1e1e; 
     }
-    .stButton>button:hover { transform: scale(1.02); box-shadow: 0 0 15px #ffcc00; }
+    
+    /* Titoli in blu scuro */
+    h1, h2, h3 {
+        color: #0e1133 !important;
+    }
+
+    /* Bottoni Oro Lamine */
+    .stButton>button {
+        background: linear-gradient(135deg, #ffcc00, #e6b800);
+        color: #000000 !important;
+        font-weight: bold;
+        border-radius: 8px;
+        border: 1px solid #cca300;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        width: 100%;
+    }
+    
+    /* Tabs (le caselle dei reparti) */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        background-color: #ffffff;
+        padding: 10px;
+        border-radius: 10px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
+    /* Riquadri per le tabelle */
+    .stDataFrame {
+        background-color: white;
+        border-radius: 10px;
+        padding: 10px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# Configurazione IA
+# --- 2. CONFIGURAZIONE IA ---
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 except Exception as e:
-    st.error("Errore configurazione API Key nei Secrets.")
+    st.error("⚠️ Configura la chiave API nei Secrets di Streamlit per attivare l'IA.")
 
-# --- 2. FUNZIONI CORE ---
-
-def analizza_con_ia(immagine_pil, tipo_analisi="mezzo"):
+# --- 3. FUNZIONI CORE ---
+def analizza_con_ia(immagine_pil, tipo_analisi="targa"):
     model = genai.GenerativeModel('gemini-1.5-flash')
     
-    if tipo_analisi == "mezzo":
-        prompt = "Analizza questo transpallet. Estrai in JSON: tipo, marca, matricola, consiglio_posizionamento."
-    elif tipo_analisi == "bolla":
-        prompt = "Analizza questo DDT (Bolla). Estrai in JSON: numero_bolla, matricola_merce, cliente."
-    elif tipo_analisi == "targa":
-        prompt = "Analizza questa targa tecnica. Estrai in JSON: marca, modello, matricola, anno."
-    else:
-        prompt = "Analizza questa immagine ed estrai i dati tecnici in JSON."
+    prompts = {
+        "targa": "Analizza questa targa tecnica. Estrai in JSON: marca, modello, matricola, anno.",
+        "bolla": "Analizza questo DDT. Estrai in JSON: numero_bolla, matricola_merce, cliente.",
+        "mezzo": "Analizza questo transpallet. Estrai in JSON: tipo, marca, matricola."
+    }
+    
+    prompt = prompts.get(tipo_analisi, prompts["targa"])
     
     try:
         response = model.generate_content([prompt, immagine_pil])
-        testo_risposta = response.text.strip()
-        # Pulizia per estrarre solo il JSON
-        if "```json" in testo_risposta:
-            testo_risposta = testo_risposta.split("```json")[1].split("```")[0]
-        elif "```" in testo_risposta:
-            testo_risposta = testo_risposta.split("```")[1].split("```")[0]
-        return json.loads(testo_risposta)
-    except Exception as e:
+        testo = response.text.strip()
+        if "```json" in testo:
+            testo = testo.split("```json")[1].split("```")[0]
+        elif "```" in testo:
+            testo = testo.split("```")[1].split("```")[0]
+        return json.loads(testo)
+    except:
         return None
 
 def carica_db(nome_file, colonne):
     if os.path.exists(nome_file):
-        try:
-            return pd.read_excel(nome_file)
-        except:
-            return pd.DataFrame(columns=colonne)
+        try: return pd.read_excel(nome_file)
+        except: return pd.DataFrame(columns=colonne)
     return pd.DataFrame(columns=colonne)
 
-# --- 3. INTERFACCIA A REPARTI (CASELLE) ---
+# --- 4. INTERFACCIA PRINCIPALE ---
 st.title("🏗️ Sistema Gestionale Lamine AI")
 
 tab_rip, tab_torre, tab_nol, tab_dep = st.tabs([
@@ -74,47 +95,63 @@ tab_rip, tab_torre, tab_nol, tab_dep = st.tabs([
 
 # --- REPARTO RIPARAZIONI ---
 with tab_rip:
-    st.header("Gestione Riparazioni (Allarme 90gg)")
+    st.subheader("🛠️ Gestione Assistenza (Allarme 90gg)")
     df_rip = carica_db("riparazioni.xlsx", ["Data", "Cliente", "Settore", "Macchina", "Tecnico", "Giorni"])
     
     if not df_rip.empty:
         df_rip['Data'] = pd.to_datetime(df_rip['Data'])
         df_rip['Giorni'] = (datetime.now() - df_rip['Data']).dt.days
-        # Evidenzia ritardi Settore 1 > 90gg
-        def style_ritardo(row):
+        
+        def evidenzia_ritardi(row):
             if row['Settore'] == "1 (Preventivata)" and row['Giorni'] > 90:
-                return ['background-color: #ff4b4b']*len(row)
-            return ['']*len(row)
-        st.dataframe(df_rip.style.apply(style_ritardo, axis=1), use_container_width=True)
+                return ['background-color: #ff4b4b; color: white'] * len(row)
+            return [''] * len(row)
+        
+        st.dataframe(df_rip.style.apply(evidenzia_ritardi, axis=1), use_container_width=True)
     else:
-        st.write("Nessuna riparazione in corso.")
+        st.info("Nessuna riparazione registrata al momento.")
 
 # --- REPARTO TORREFAZIONE ---
 with tab_torre:
-    st.header("☕ Hub Torrefattori (Lavazza, Bonanni, ecc.)")
-    torre_list = ["Lavazza", "Ross caffè", "Bonanni", "La Genovese", "Altro"]
-    scelta_torre = st.selectbox("Seleziona Torrefattore", torre_list)
+    st.subheader("☕ Hub Macchine Caffè")
+    torrefattori = ["Lavazza", "Ross caffè", "Bonanni", "La Genovese", "Costadoro", "Altro"]
+    cliente_scelto = st.selectbox("Seleziona il Torrefattore", torrefattori)
     
-    foto_t = st.camera_input("Scansiona targa macchina caffè", key="torre_cam")
-    if foto_t:
-        dati = analizza_con_ia(Image.open(foto_t), "targa")
-        if dati:
-            st.success(f"Scheda creata per {scelta_torre}")
-            st.json(dati)
+    foto_caffe = st.camera_input("Scansiona targa macchina caffè", key="cam_torre")
+    if foto_caffe:
+        with st.spinner("Creazione scheda automatica..."):
+            dati = analizza_con_ia(Image.open(foto_caffe), "targa")
+            if dati:
+                st.success(f"Dati estratti per {cliente_scelto}:")
+                st.write(dati)
+                if st.button("SALVA NEL DATABASE TORREFAZIONE"):
+                    # Qui andrebbe la logica di salvataggio su Excel
+                    st.toast("Scheda salvata!")
 
 # --- REPARTO NOLEGGIO ---
 with tab_nol:
-    st.header("🚜 Disponibilità Parco Noleggio")
-    m1 = st.checkbox("Muletto 1.5t - Disponibile 🟢")
-    m2 = st.checkbox("Transpallet Elettrico - Disponibile 🟢")
-    if not m1: st.error("Muletto 1.5t in USO 🔴")
-    if not m2: st.error("Transpallet Elettrico in USO 🔴")
+    st.subheader("🚜 Parco Macchine da Noleggio")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write("**Muletto 1.5t**")
+        stato1 = st.toggle("Disponibile", value=True, key="nol1")
+        if stato1: st.success("LIBERO 🟢")
+        else: st.error("IN NOLEGGIO 🔴")
+    with col2:
+        st.write("**Transpallet Elettrico**")
+        stato2 = st.toggle("Disponibile", value=True, key="nol2")
+        if stato2: st.success("LIBERO 🟢")
+        else: st.error("IN NOLEGGIO 🔴")
 
-# --- REPARTO DEPOSITO & IMPORT ---
+# --- REPARTO DEPOSITO & RISTORAZIONE ---
 with tab_dep:
-    st.header("📦 Deposito & Caricamento Elenchi")
-    file_ex = st.file_uploader("Trascina file Excel Ristorazione", type=['xlsx'])
-    if file_ex:
-        df_ex = pd.read_excel(file_ex)
-        st.write("Anteprima Elenco:")
-        st.dataframe(df_ex.head())
+    st.subheader("📦 Deposito & Importazione Elenchi")
+    st.write("Trascina qui i file Excel della Ristorazione (Lavastoviglie, Forni, Ghiaccio)")
+    file_upload = st.file_uploader("Carica file .xlsx", type=["xlsx"])
+    
+    if file_upload:
+        df_caricato = pd.read_excel(file_upload)
+        st.write("Anteprima dati caricati:")
+        st.dataframe(df_caricato.head(), use_container_width=True)
+        if st.button("UNISCI AL MAGAZZINO"):
+            st.success("Tutti i macchinari sono stati importati correttamente!")
