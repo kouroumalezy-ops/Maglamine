@@ -1,118 +1,152 @@
 import streamlit as st
-
-# QUESTA DEVE ESSERE LA PRIMA RIGA DI CODICE STREAMLIT
-st.set_page_config(
-    page_title="Magazzino Lamine", # <--- Qui metti il tuo nome
-    page_icon="🔵",                # <--- Qui puoi mettere un'emoji o un link a un'immagine
-    layout="wide"
-)
-
-st.title("Magazzino Lamine Kourouma")
-# ... resto del tuo codice ...
-import streamlit as st
+import pandas as pd
+import os
+from datetime import datetime
 import google.generativeai as genai
-from fpdf import FPDF
 from PIL import Image
-from datetime import datetime, timedelta
+import json
 
-# --- 1. SICUREZZA E AI ---
-# Assicurati di aggiungere GOOGLE_API_KEY nei 'Secrets' di Streamlit Cloud
-try:
-    API_KEY = st.secrets["GOOGLE_API_KEY"]
-    genai.configure(api_key=API_KEY)
-except:
-    st.error("⚠️ Chiave API non trovata! Configurala nei Secrets di Streamlit.")
-
-# --- 2. CONFIGURAZIONE ESTETICA (ROSSO/BLU) ---
-st.set_page_config(page_title="Lamine Kourouma Magazzino", layout="centered")
+# --- 1. CONFIGURAZIONE E STILE "LAMINE PRO" ---
+st.set_page_config(page_title="Lamine AI - Sistema Logistico", page_icon="🏗️", layout="wide")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #f4f7f9; }
-    h1 { color: #1d3557; border-bottom: 3px solid #e63946; }
-    .stButton>button { background-color: #e63946; color: white; border-radius: 10px; border: none; height: 50px; font-weight: bold;}
-    .stButton>button:hover { background-color: #1d3557; }
+    .stApp { background-color: #0e1117; color: white; }
+    .stButton>button {
+        background: linear-gradient(135deg, #ffcc00, #ff9900);
+        color: black !important;
+        font-weight: bold;
+        border-radius: 10px;
+        border: none;
+        height: 3em;
+        transition: 0.3s;
+    }
+    .stButton>button:hover { transform: scale(1.02); box-shadow: 0 0 15px #ffcc00; }
+    .status-card {
+        padding: 20px;
+        border-radius: 15px;
+        background-color: #1e2130;
+        border-left: 5px solid #ffcc00;
+        margin-bottom: 10px;
+    }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. FUNZIONI LOGICHE ---
-def analizza_targa(foto):
+# Configurazione IA (Inserisci la tua chiave qui o nei secrets)
+try:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+except:
+    genai.configure(api_key="TUA_CHIAVE_QUI")
+
+# --- 2. FUNZIONI CORE ---
+
+def analizza_con_ia(immagine_pil, tipo_analisi="mezzo"):
     model = genai.GenerativeModel('gemini-1.5-flash')
-    img = Image.open(foto)
-    prompt = "Analizza questa etichetta tecnica. Estrai: Marca, Modello, S/N. Rispondi in modo schematico."
-    response = model.generate_content([prompt, img])
-    return response.text
-
-def crea_scheda_pdf(dati):
-    pdf = FPDF()
-    pdf.add_page()
-    # Intestazione Blu
-    pdf.set_fill_color(29, 53, 87)
-    pdf.rect(0, 0, 210, 35, 'F')
-    pdf.set_font("Arial", 'B', 18)
-    pdf.set_text_color(255, 255, 255)
-    pdf.text(15, 22, "LAMINE KOUROUMA - SCHEDA TECNICA")
+    if tipo_analisi == "mezzo":
+        prompt = "Analizza questo transpallet. Estrai in JSON: tipo, marca, matricola, consiglio_posizionamento."
+    else:
+        prompt = "Analizza questo DDT (Bolla). Estrai in JSON: numero_bolla, matricola_merce, cliente."
     
-    # Contenuto
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("Arial", '', 12)
-    pdf.ln(40)
-    pdf.cell(0, 10, f"DATA: {dati['data']}", ln=True)
-    pdf.cell(0, 10, f"REPARTO: {dati['reparto']}", ln=True)
-    pdf.cell(0, 10, f"SCADENZA PREVISTA: {dati['scadenza']}", ln=True)
-    pdf.ln(5)
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(0, 10, f"MACCHINARIO: {dati['modello']}", ln=True)
-    pdf.cell(0, 10, f"MATRICOLA: {dati['sn']}", ln=True)
-    pdf.cell(0, 10, f"CLIENTE: {dati['cliente']}", ln=True)
-    pdf.ln(10)
-    pdf.cell(0, 10, "NOTE INTERVENTO:", ln=True)
-    pdf.set_font("Arial", '', 11)
-    pdf.multi_cell(0, 10, dati['note'], border=1)
-    return pdf.output(dest='S').encode('latin-1')
+    try:
+        response = model.generate_content([prompt, immagine_pil])
+        testo_pulito = response.text.replace("```json", "").replace("
+```", "").strip()
+        return json.loads(testo_pulito)
+    except:
+        return None
 
-# --- 4. INTERFACCIA APP ---
-st.title("📦 Magazzino Lamine Kourouma")
+# Caricamento database (Excel)
+def carica_db(nome_file, colonne):
+    if os.path.exists(nome_file):
+        return pd.read_excel(nome_file)
+    return pd.DataFrame(columns=colonne)
 
-# Fotocamera
-foto_input = st.camera_input("Scansiona Targa Macchinario")
+# --- 3. INTERFACCIA PRINCIPALE ---
+st.title("🏗️ Lamine AI: Gestione Intelligente & Sicurezza")
 
-if foto_input:
-    with st.spinner("L'AI sta leggendo i dati..."):
-        testo_ai = analizza_targa(foto_input)
-        st.success("Dati rilevati correttamente!")
-        st.text_area("Dati AI:", testo_ai)
+menu = st.sidebar.radio("Scegli Operazione", ["Uscita Merce (Controllo Bolla)", "Deposito & Inventario", "Riparazioni (Allarme 90gg)", "Disponibilità Muletti"])
 
-st.divider()
-
-# Form di registrazione
-with st.form("magazzino_form"):
+# --- MODULO 1: CONTROLLO BOLLA (ANTI-FRODE) ---
+if menu == "Uscita Merce (Controllo Bolla)":
+    st.subheader("🚨 Smart Gate: Verifica Documento e Matricola")
     col1, col2 = st.columns(2)
+    
     with col1:
-        modello = st.text_input("Modello Macchina")
-        cliente = st.text_input("Cliente")
-    with col2:
-        reparto = st.selectbox("Destinazione", ["Deposito", "Riparazione", "Noleggio"])
-        seriale = st.text_input("S/N o Matricola")
+        foto_bolla = st.camera_input("Fotografa la Bolla (DDT)")
     
-    note = st.text_area("Descrizione Guasto / Note")
-    
-    inviato = st.form_submit_button("REGISTRA E GENERA PDF")
+    if foto_bolla:
+        dati_bolla = analizza_con_ia(Image.open(foto_bolla), "bolla")
+        with col2:
+            if dati_bolla:
+                st.write(f"📄 **Bolla N:** {dati_bolla.get('numero_bolla')}")
+                st.write(f"👤 **Cliente:** {dati_bolla.get('cliente')}")
+                st.write(f"🔢 **Matricola su Bolla:** {dati_bolla.get('matricola_merce')}")
+                
+                # Simulazione incrocio dati
+                if st.button("VERIFICA AUTENTICITÀ"):
+                    # Qui aggiungeresti il controllo col tuo DB reale
+                    st.components.v1.html("""
+                        <script>
+                        alert("✅ Lamine, la bolla è originale. Puoi procedere all'uscita.");
+                        </script>
+                    """, height=0)
+            else:
+                st.error("Errore lettura bolla. Possibile documento non conforme!")
 
-    if inviato:
-        data_oggi = datetime.now()
-        data_scadenza = data_oggi + timedelta(days=90)
+# --- MODULO 2: DEPOSITO & UBICAZIONE ---
+elif menu == "Deposito & Inventario":
+    st.subheader("📍 Mappa Macchinari in Deposito")
+    df_dep = carica_db("deposito.xlsx", ["Data", "Modello", "Matricola", "Ubicazione", "Tecnico"])
+    
+    with st.expander("➕ Registra Nuovo Ingresso"):
+        c1, c2, c3 = st.columns(3)
+        modello = c1.text_input("Modello")
+        matricola = c2.text_input("Matricola")
+        ubicazione = c3.text_input("Ubicazione (es. Settore A1)")
+        tecnico = st.text_input("Tecnico che ha posizionato")
         
-        dati_scheda = {
-            "data": data_oggi.strftime("%d/%m/%Y"),
-            "scadenza": data_scadenza.strftime("%d/%m/%Y"),
-            "modello": modello,
-            "cliente": cliente,
-            "reparto": reparto,
-            "sn": seriale,
-            "note": note
-        }
+        if st.button("SALVA POSIZIONE"):
+            nuovo = {"Data": datetime.now(), "Modello": modello, "Matricola": matricola, "Ubicazione": ubicazione, "Tecnico": tecnico}
+            df_dep = pd.concat([df_dep, pd.DataFrame([nuovo])], ignore_index=True)
+            df_dep.to_excel("deposito.xlsx", index=False)
+            st.success("Posizione registrata! Non dovrai più girare a vuoto.")
+
+    st.dataframe(df_dep, use_container_width=True)
+
+# --- MODULO 3: RIPARAZIONI (ALLARME 90GG) ---
+elif menu == "Riparazioni (Allarme 90gg)":
+    st.subheader("🔧 Gestione Settori Riparazione")
+    df_rip = carica_db("riparazioni.xlsx", ["Data_Ingresso", "Cliente", "Settore", "Macchina", "Tecnico_Ritiro"])
+    
+    # Calcolo giorni
+    if not df_rip.empty:
+        df_rip['Data_Ingresso'] = pd.to_datetime(df_rip['Data_Ingresso'])
+        df_rip['Giorni'] = (datetime.now() - df_rip['Data_Ingresso']).dt.days
         
-        pdf_bytes = crea_scheda_pdf(dati_scheda)
-        st.download_button("📥 Scarica Scheda Riparazione", pdf_bytes, f"Scheda_{seriale}.pdf", "application/pdf")
+        # Allarme 90 giorni Settore 1
+        ritardi = df_rip[(df_rip['Settore'] == "1 (Preventivata)") & (df_rip['Giorni'] > 90)]
+        if not ritardi.empty:
+            st.warning(f"⚠️ Lamine, ci sono {len(ritardi)} macchine ferme da oltre 90 giorni!")
+            st.components.v1.html("""<script>alert("🚨 ATTENZIONE: Ritardi gravi nel Settore 1!");</script>""", height=0)
+
+    st.write("### 🗂️ Elenco Riparazioni")
+    st.dataframe(df_rip, use_container_width=True)
+
+# --- MODULO 4: DISPONIBILITÀ MULETTI ---
+elif menu == "Disponibilità Muletti":
+    st.subheader("🚜 Stato Flotta Interna (Manuale)")
+    
+    # Esempio di gestione rapida
+    st.markdown("Clicca per cambiare lo stato della macchina:")
+    col1, col2, col3 = st.columns(3)
+    
+    macchine = ["Muletto 1.5t", "Transpallet Elettrico", "Muletto Grande"]
+    for i, m in enumerate(macchine):
+        with [col1, col2, col3][i]:
+            st.info(f"**{m}**")
+            stato = st.radio("Stato:", ["Disponibile 🟢", "In Uso 🔴"], key=f"m_{i}")
+            if stato == "Disponibile 🟢":
+                st.write("📍 Posizione: Piazzale")
+            else:
+                st.write("👤 Preso da: Tecnico X")
 
