@@ -22,131 +22,99 @@ st.markdown("""
         transition: 0.3s;
     }
     .stButton>button:hover { transform: scale(1.02); box-shadow: 0 0 15px #ffcc00; }
-    .status-card {
-        padding: 20px;
-        border-radius: 15px;
-        background-color: #1e2130;
-        border-left: 5px solid #ffcc00;
-        margin-bottom: 10px;
-    }
     </style>
     """, unsafe_allow_html=True)
 
-# Configurazione IA (Inserisci la tua chiave qui o nei secrets)
+# Configurazione IA
 try:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-except:
-    genai.configure(api_key="TUA_CHIAVE_QUI")
+except Exception as e:
+    st.error("Errore configurazione API Key nei Secrets.")
 
 # --- 2. FUNZIONI CORE ---
 
 def analizza_con_ia(immagine_pil, tipo_analisi="mezzo"):
     model = genai.GenerativeModel('gemini-1.5-flash')
+    
     if tipo_analisi == "mezzo":
         prompt = "Analizza questo transpallet. Estrai in JSON: tipo, marca, matricola, consiglio_posizionamento."
-    else:
+    elif tipo_analisi == "bolla":
         prompt = "Analizza questo DDT (Bolla). Estrai in JSON: numero_bolla, matricola_merce, cliente."
+    elif tipo_analisi == "targa":
+        prompt = "Analizza questa targa tecnica. Estrai in JSON: marca, modello, matricola, anno."
+    else:
+        prompt = "Analizza questa immagine ed estrai i dati tecnici in JSON."
     
     try:
         response = model.generate_content([prompt, immagine_pil])
-        testo_pulito = response.text.replace("```json", "").replace("
-```", "").strip()
-        return json.loads(testo_pulito)
-    except:
+        testo_risposta = response.text.strip()
+        # Pulizia per estrarre solo il JSON
+        if "```json" in testo_risposta:
+            testo_risposta = testo_risposta.split("```json")[1].split("```")[0]
+        elif "```" in testo_risposta:
+            testo_risposta = testo_risposta.split("```")[1].split("```")[0]
+        return json.loads(testo_risposta)
+    except Exception as e:
         return None
 
-# Caricamento database (Excel)
 def carica_db(nome_file, colonne):
     if os.path.exists(nome_file):
-        return pd.read_excel(nome_file)
+        try:
+            return pd.read_excel(nome_file)
+        except:
+            return pd.DataFrame(columns=colonne)
     return pd.DataFrame(columns=colonne)
 
-# --- 3. INTERFACCIA PRINCIPALE ---
-st.title("🏗️ Lamine AI: Gestione Intelligente & Sicurezza")
+# --- 3. INTERFACCIA A REPARTI (CASELLE) ---
+st.title("🏗️ Sistema Gestionale Lamine AI")
 
-menu = st.sidebar.radio("Scegli Operazione", ["Uscita Merce (Controllo Bolla)", "Deposito & Inventario", "Riparazioni (Allarme 90gg)", "Disponibilità Muletti"])
+tab_rip, tab_torre, tab_nol, tab_dep = st.tabs([
+    "🛠️ RIPARAZIONI", "☕ TORREFAZIONE", "🚜 NOLEGGIO", "📦 DEPOSITO"
+])
 
-# --- MODULO 1: CONTROLLO BOLLA (ANTI-FRODE) ---
-if menu == "Uscita Merce (Controllo Bolla)":
-    st.subheader("🚨 Smart Gate: Verifica Documento e Matricola")
-    col1, col2 = st.columns(2)
+# --- REPARTO RIPARAZIONI ---
+with tab_rip:
+    st.header("Gestione Riparazioni (Allarme 90gg)")
+    df_rip = carica_db("riparazioni.xlsx", ["Data", "Cliente", "Settore", "Macchina", "Tecnico", "Giorni"])
     
-    with col1:
-        foto_bolla = st.camera_input("Fotografa la Bolla (DDT)")
-    
-    if foto_bolla:
-        dati_bolla = analizza_con_ia(Image.open(foto_bolla), "bolla")
-        with col2:
-            if dati_bolla:
-                st.write(f"📄 **Bolla N:** {dati_bolla.get('numero_bolla')}")
-                st.write(f"👤 **Cliente:** {dati_bolla.get('cliente')}")
-                st.write(f"🔢 **Matricola su Bolla:** {dati_bolla.get('matricola_merce')}")
-                
-                # Simulazione incrocio dati
-                if st.button("VERIFICA AUTENTICITÀ"):
-                    # Qui aggiungeresti il controllo col tuo DB reale
-                    st.components.v1.html("""
-                        <script>
-                        alert("✅ Lamine, la bolla è originale. Puoi procedere all'uscita.");
-                        </script>
-                    """, height=0)
-            else:
-                st.error("Errore lettura bolla. Possibile documento non conforme!")
-
-# --- MODULO 2: DEPOSITO & UBICAZIONE ---
-elif menu == "Deposito & Inventario":
-    st.subheader("📍 Mappa Macchinari in Deposito")
-    df_dep = carica_db("deposito.xlsx", ["Data", "Modello", "Matricola", "Ubicazione", "Tecnico"])
-    
-    with st.expander("➕ Registra Nuovo Ingresso"):
-        c1, c2, c3 = st.columns(3)
-        modello = c1.text_input("Modello")
-        matricola = c2.text_input("Matricola")
-        ubicazione = c3.text_input("Ubicazione (es. Settore A1)")
-        tecnico = st.text_input("Tecnico che ha posizionato")
-        
-        if st.button("SALVA POSIZIONE"):
-            nuovo = {"Data": datetime.now(), "Modello": modello, "Matricola": matricola, "Ubicazione": ubicazione, "Tecnico": tecnico}
-            df_dep = pd.concat([df_dep, pd.DataFrame([nuovo])], ignore_index=True)
-            df_dep.to_excel("deposito.xlsx", index=False)
-            st.success("Posizione registrata! Non dovrai più girare a vuoto.")
-
-    st.dataframe(df_dep, use_container_width=True)
-
-# --- MODULO 3: RIPARAZIONI (ALLARME 90GG) ---
-elif menu == "Riparazioni (Allarme 90gg)":
-    st.subheader("🔧 Gestione Settori Riparazione")
-    df_rip = carica_db("riparazioni.xlsx", ["Data_Ingresso", "Cliente", "Settore", "Macchina", "Tecnico_Ritiro"])
-    
-    # Calcolo giorni
     if not df_rip.empty:
-        df_rip['Data_Ingresso'] = pd.to_datetime(df_rip['Data_Ingresso'])
-        df_rip['Giorni'] = (datetime.now() - df_rip['Data_Ingresso']).dt.days
-        
-        # Allarme 90 giorni Settore 1
-        ritardi = df_rip[(df_rip['Settore'] == "1 (Preventivata)") & (df_rip['Giorni'] > 90)]
-        if not ritardi.empty:
-            st.warning(f"⚠️ Lamine, ci sono {len(ritardi)} macchine ferme da oltre 90 giorni!")
-            st.components.v1.html("""<script>alert("🚨 ATTENZIONE: Ritardi gravi nel Settore 1!");</script>""", height=0)
+        df_rip['Data'] = pd.to_datetime(df_rip['Data'])
+        df_rip['Giorni'] = (datetime.now() - df_rip['Data']).dt.days
+        # Evidenzia ritardi Settore 1 > 90gg
+        def style_ritardo(row):
+            if row['Settore'] == "1 (Preventivata)" and row['Giorni'] > 90:
+                return ['background-color: #ff4b4b']*len(row)
+            return ['']*len(row)
+        st.dataframe(df_rip.style.apply(style_ritardo, axis=1), use_container_width=True)
+    else:
+        st.write("Nessuna riparazione in corso.")
 
-    st.write("### 🗂️ Elenco Riparazioni")
-    st.dataframe(df_rip, use_container_width=True)
-
-# --- MODULO 4: DISPONIBILITÀ MULETTI ---
-elif menu == "Disponibilità Muletti":
-    st.subheader("🚜 Stato Flotta Interna (Manuale)")
+# --- REPARTO TORREFAZIONE ---
+with tab_torre:
+    st.header("☕ Hub Torrefattori (Lavazza, Bonanni, ecc.)")
+    torre_list = ["Lavazza", "Ross caffè", "Bonanni", "La Genovese", "Altro"]
+    scelta_torre = st.selectbox("Seleziona Torrefattore", torre_list)
     
-    # Esempio di gestione rapida
-    st.markdown("Clicca per cambiare lo stato della macchina:")
-    col1, col2, col3 = st.columns(3)
-    
-    macchine = ["Muletto 1.5t", "Transpallet Elettrico", "Muletto Grande"]
-    for i, m in enumerate(macchine):
-        with [col1, col2, col3][i]:
-            st.info(f"**{m}**")
-            stato = st.radio("Stato:", ["Disponibile 🟢", "In Uso 🔴"], key=f"m_{i}")
-            if stato == "Disponibile 🟢":
-                st.write("📍 Posizione: Piazzale")
-            else:
-                st.write("👤 Preso da: Tecnico X")
+    foto_t = st.camera_input("Scansiona targa macchina caffè", key="torre_cam")
+    if foto_t:
+        dati = analizza_con_ia(Image.open(foto_t), "targa")
+        if dati:
+            st.success(f"Scheda creata per {scelta_torre}")
+            st.json(dati)
 
+# --- REPARTO NOLEGGIO ---
+with tab_nol:
+    st.header("🚜 Disponibilità Parco Noleggio")
+    m1 = st.checkbox("Muletto 1.5t - Disponibile 🟢")
+    m2 = st.checkbox("Transpallet Elettrico - Disponibile 🟢")
+    if not m1: st.error("Muletto 1.5t in USO 🔴")
+    if not m2: st.error("Transpallet Elettrico in USO 🔴")
+
+# --- REPARTO DEPOSITO & IMPORT ---
+with tab_dep:
+    st.header("📦 Deposito & Caricamento Elenchi")
+    file_ex = st.file_uploader("Trascina file Excel Ristorazione", type=['xlsx'])
+    if file_ex:
+        df_ex = pd.read_excel(file_ex)
+        st.write("Anteprima Elenco:")
+        st.dataframe(df_ex.head())
