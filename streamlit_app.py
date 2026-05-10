@@ -143,4 +143,3 @@ with tab_dep:
         if st.button("📥 UNISCI AL MAGAZZINO"):
             st.success("Importazione completata!")
 
-```
