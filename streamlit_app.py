@@ -6,24 +6,25 @@ import google.generativeai as genai
 from PIL import Image
 import json
 
-# --- 1. CONFIGURAZIONE E STILE "LAMINE LIGHT & PRO" ---
+# --- 1. CONFIGURAZIONE E STILE "LAMINE LIGHT & PRO" + ICONA IPHONE ---
 st.set_page_config(page_title="Lamine AI - Sistema Logistico", page_icon="🏗️", layout="wide")
 
-st.markdown("""
+st.markdown(f"""
+    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/kouroumalezy-ops/Maglamine/main/IMG_0407.png">
     <style>
     /* Sfondo grigio chiaro professionale */
-    .stApp { 
+    .stApp {{ 
         background-color: #f0f2f6; 
         color: #1e1e1e; 
-    }
+    }}
     
     /* Titoli in blu scuro */
-    h1, h2, h3 {
+    h1, h2, h3 {{
         color: #0e1133 !important;
-    }
+    }}
 
     /* Bottoni Oro Lamine */
-    .stButton>button {
+    .stButton>button {{
         background: linear-gradient(135deg, #ffcc00, #e6b800);
         color: #000000 !important;
         font-weight: bold;
@@ -31,23 +32,23 @@ st.markdown("""
         border: 1px solid #cca300;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         width: 100%;
-    }
+    }}
     
     /* Tabs (le caselle dei reparti) */
-    .stTabs [data-baseweb="tab-list"] {
+    .stTabs [data-baseweb="tab-list"] {{
         gap: 10px;
         background-color: #ffffff;
         padding: 10px;
         border-radius: 10px;
         box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    }
+    }}
 
     /* Riquadri per le tabelle */
-    .stDataFrame {
+    .stDataFrame {{
         background-color: white;
         border-radius: 10px;
         padding: 10px;
-    }
+    }}
     </style>
     """, unsafe_allow_html=True)
 
@@ -125,7 +126,6 @@ with tab_torre:
                 st.success(f"Dati estratti per {cliente_scelto}:")
                 st.write(dati)
                 if st.button("SALVA NEL DATABASE TORREFAZIONE"):
-                    # Qui andrebbe la logica di salvataggio su Excel
                     st.toast("Scheda salvata!")
 
 # --- REPARTO NOLEGGIO ---
