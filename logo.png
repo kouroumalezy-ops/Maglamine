@@ -1,3 +1,0 @@
-st.markdown(f"""
-    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/Lamine-hub/Maglamine/main/logo.png">
-    """, unsafe_allow_html=True)
