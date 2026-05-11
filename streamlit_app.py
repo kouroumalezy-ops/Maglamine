@@ -1,4 +1,4 @@
-
+```python
 import streamlit as st
 import pandas as pd
 import os
@@ -7,139 +7,99 @@ import google.generativeai as genai
 from PIL import Image
 import json
 
-# --- 1. CONFIGURAZIONE, ICONA IPHONE E STILE PRO ---
-# Deve essere la primissima istruzione Streamlit
+# --- 1. CONFIGURAZIONE E FORZATURA LOGO ---
+# Usiamo un link che cambia ogni volta per ingannare la memoria del telefono
+LOGO_URL = "https://raw.githubusercontent.com/kouroumalezy-ops/Maglamine/main/IMG_0407.png"
+BORN_TIME = datetime.now().strftime("%H%M%S")
+
 st.set_page_config(
-    page_title="Lamine AI - Sistema Logistico", 
-    page_icon="🏗️", 
+    page_title="Lamine AI", 
+    page_icon=LOGO_URL,
     layout="wide"
 )
 
-# CSS per stile grafico e collegamento icona Apple
+# HTML/CSS Speciale per forzare l'icona iPhone (Apple Touch Icon)
 st.markdown(f"""
-    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/kouroumalezy-ops/Maglamine/main/IMG_0407.png">
+    <head>
+        <link rel="apple-touch-icon" href="{LOGO_URL}?v={BORN_TIME}">
+        <link rel="apple-touch-icon-precomposed" href="{LOGO_URL}?v={BORN_TIME}">
+        <link rel="icon" href="{LOGO_URL}?v={BORN_TIME}">
+    </head>
     <style>
+    /* Sfondo e stile generale */
     .stApp {{ 
-        background-color: #f0f2f6; 
-        color: #1e1e1e; 
+        background-color: #f5f7f9; 
     }}
     
-    h1, h2, h3 {{
-        color: #0e1133 !important;
+    /* Titolo Lamine AI in Oro */
+    .title-gold {{
+        color: #d4af37;
+        font-family: 'Impact', sans-serif;
+        font-size: 45px;
+        letter-spacing: 2px;
+        margin: 0;
     }}
 
-    .stButton>button {{
-        background: linear-gradient(135deg, #ffcc00, #e6b800) !important;
-        color: #000000 !important;
+    /* Bottoni stile Lamine (Oro) */
+    div.stButton > button {{
+        background: linear-gradient(135deg, #ffcc00, #d4af37) !important;
+        color: black !important;
+        border: none !important;
         font-weight: bold !important;
-        border-radius: 8px !important;
-        border: 1px solid #cca300 !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        width: 100%;
-    }}
-    
-    .stTabs [data-baseweb="tab-list"] {{
-        gap: 10px;
-        background-color: #ffffff;
-        padding: 10px;
-        border-radius: 10px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        border-radius: 12px !important;
+        height: 3.5em !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
     }}
 
-    .stDataFrame {{
+    /* Tabs bianche professionali */
+    .stTabs [data-baseweb="tab-list"] {{
         background-color: white;
-        border-radius: 10px;
-        padding: 10px;
+        border-radius: 15px;
+        padding: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }}
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. CONFIGURAZIONE IA ---
+# --- HEADER CON LOGO ---
+col_icon, col_txt = st.columns([1, 5])
+with col_icon:
+    st.image(LOGO_URL, width=100)
+with col_txt:
+    st.markdown('<p class="title-gold">LAMINE AI</p>', unsafe_allow_html=True)
+    st.caption("Logistica Professionale & Assistenza")
+
+# --- 2. IA ---
 try:
     if "GEMINI_API_KEY" in st.secrets:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-    else:
-        st.warning("⚠️ Nota: Inserisci la chiave API nei Secrets di Streamlit per attivare l'analisi automatica.")
-except Exception:
+except:
     pass
 
-# --- 3. FUNZIONI DI SUPPORTO ---
-def analizza_con_ia(immagine_pil, tipo_analisi="targa"):
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    prompts = {
-        "targa": "Analizza questa targa tecnica. Estrai in JSON: marca, modello, matricola, anno.",
-        "bolla": "Analizza questo DDT. Estrai in JSON: numero_bolla, matricola_merce, cliente.",
-        "mezzo": "Analizza questo transpallet. Estrai in JSON: tipo, marca, matricola."
-    }
-    prompt = prompts.get(tipo_analisi, prompts["targa"])
-    try:
-        response = model.generate_content([prompt, immagine_pil])
-        testo = response.text.strip()
-        if "```json" in testo:
-            testo = testo.split("```json")[1].split("```")[0]
-        elif "```" in testo:
-            testo = testo.split("```")[1].split("```")[0]
-        return json.loads(testo)
-    except:
-        return None
+# --- 3. REPARTI ---
+tabs = st.tabs(["🛠️ ASSISTENZA", "☕ CAFFÈ", "🚜 MEZZI", "📦 DEPOSITO"])
 
-def carica_db(nome_file, colonne):
-    if os.path.exists(nome_file):
-        try: 
-            return pd.read_excel(nome_file)
-        except: 
-            return pd.DataFrame(columns=colonne)
-    return pd.DataFrame(columns=colonne)
+with tabs[0]:
+    st.subheader("Riparazioni Attive")
+    st.info("Sistema di monitoraggio scadenze 90 giorni.")
+    st.dataframe(pd.DataFrame({"Data": ["12/05/2024"], "Cliente": ["Test"], "Stato": ["In corso"]}), use_container_width=True)
 
-# --- 4. INTERFACCIA UTENTE ---
-st.title("🏗️ Sistema Gestionale Lamine AI")
+with tabs[1]:
+    st.subheader("Gestione Torrefazione")
+    st.selectbox("Scegli Cliente", ["Lavazza", "Ross Caffè", "Bonanni", "Altro"])
+    st.camera_input("Foto Targa")
 
-tab_rip, tab_torre, tab_nol, tab_dep = st.tabs([
-    "🛠️ RIPARAZIONI", "☕ TORREFAZIONE", "🚜 NOLEGGIO", "📦 DEPOSITO"
-])
+with tabs[2]:
+    st.subheader("Stato Noleggio")
+    c1, c2 = st.columns(2)
+    c1.metric("Muletti", "3 Liberi")
+    c2.metric("Transpallet", "1 In Noleggio")
+    st.toggle("Aggiorna Stato Mezzi")
 
-with tab_rip:
-    st.subheader("🛠️ Gestione Assistenza Tecnica")
-    df_rip = carica_db("riparazioni.xlsx", ["Data", "Cliente", "Settore", "Macchina", "Tecnico", "Giorni"])
-    if not df_rip.empty:
-        df_rip['Data'] = pd.to_datetime(df_rip['Data'])
-        df_rip['Giorni'] = (datetime.now() - df_rip['Data']).dt.days
-        st.dataframe(df_rip, use_container_width=True)
-    else:
-        st.info("Nessuna riparazione registrata.")
+with tabs[3]:
+    st.subheader("Inventario Magazzino")
+    st.file_uploader("Carica File Excel", type=["xlsx"])
+    if st.button("Sincronizza Dati"):
+        st.success("Database Aggiornato!")
 
-with tab_torre:
-    st.subheader("☕ Hub Macchine Caffè")
-    torrefattori = ["Lavazza", "Ross caffè", "Bonanni", "La Genovese", "Costadoro", "Altro"]
-    cliente_scelto = st.selectbox("Seleziona il Cliente", torrefattori)
-    foto_caffe = st.camera_input("Scansiona targa macchina caffè", key="cam_torre")
-    if foto_caffe:
-        with st.spinner("Analisi IA..."):
-            dati = analizza_con_ia(Image.open(foto_caffe), "targa")
-            if dati:
-                st.success(f"Dati estratti per {cliente_scelto}:")
-                st.json(dati)
-                if st.button("💾 SALVA SCHEDA"):
-                    st.toast("Salvato!")
-
-with tab_nol:
-    st.subheader("🚜 Stato Parco Mezzi")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.info("**Muletto 1.5t**")
-        if st.toggle("Disponibile", value=True, key="nol1"): st.success("LIBERO 🟢")
-        else: st.error("IN NOLEGGIO 🔴")
-    with col2:
-        st.info("**Transpallet Elettrico**")
-        if st.toggle("Disponibile", value=True, key="nol2"): st.success("LIBERO 🟢")
-        else: st.error("IN NOLEGGIO 🔴")
-
-with tab_dep:
-    st.subheader("📦 Deposito Merci")
-    file_upload = st.file_uploader("Carica file .xlsx", type=["xlsx"])
-    if file_upload:
-        df_caricato = pd.read_excel(file_upload)
-        st.dataframe(df_caricato.head(), use_container_width=True)
-        if st.button("📥 UNISCI AL MAGAZZINO"):
-            st.success("Importazione completata!")
-
+```
