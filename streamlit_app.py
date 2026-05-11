@@ -1,4 +1,4 @@
-```python
+
 import streamlit as st
 import pandas as pd
 import os
@@ -101,5 +101,3 @@ with tabs[3]:
     st.file_uploader("Carica File Excel", type=["xlsx"])
     if st.button("Sincronizza Dati"):
         st.success("Database Aggiornato!")
-
-```
